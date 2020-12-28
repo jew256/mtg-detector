@@ -1,5 +1,7 @@
+from PIL import Image
 import numpy as np
 import cv2
+import imagehash
 
 ASPECT_THRESHOLD = 0.7
 AREA_LOWER_THRESHOLD = 0.1
@@ -85,7 +87,7 @@ def find_cards(frame):
         if len(approx) == 4:
             rect = cv2.minAreaRect(c)
             (x, y), (width, height), angle = rect
-            aspect_ratio = min(width, height) / max(width, height)
+            # aspect_ratio = min(width, height) / max(width, height)
             area = width*height
             frame_area = frame.shape[0]*frame.shape[1]
             if area/frame_area > AREA_LOWER_THRESHOLD and area/frame_area < AREA_UPPER_THRESHOLD:
@@ -119,6 +121,12 @@ def find_cards(frame):
             #cv2.drawContours(frame, [c], 0, (36, 255, 12), 3)
     return frame, roi
 
+def analyze_ROI(roi):
+    for r in roi: 
+
+        hash = imagehash.average_hash(roi)
+        #for hashcode in hashcode list:
+            #retval	=	cv2.img_hash_ImgHashBase.compare(hashOne, hashTwo)
 
 
 def video_capture():
@@ -141,14 +149,19 @@ def video_capture():
     cv2.destroyAllWindows()
 
 def image_input():
-    img = cv2.imread("spore_frog.jpg")
+    img = cv2.imread("uncomfortable_chill.jpg")
     resized_original = cv2.resize(img, (int(img.shape[1]/4), int(img.shape[0]/4)))
     cv2.imshow('original', resized_original)
     image, roi = find_cards(img)
     resized = cv2.resize(image, (int(image.shape[1]/4), int(image.shape[0]/4)))
     cv2.imshow('frame', resized)
+    analyze_ROI(roi)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-#video_capture()
-image_input()
+def main():
+    #video_capture()
+    image_input()
+
+if __name__ == "__main__":
+    main()
