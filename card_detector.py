@@ -2,10 +2,19 @@ from PIL import Image
 import numpy as np
 import cv2
 import imagehash
+import json
+import os
+import pytesseract 
 
 ASPECT_THRESHOLD = 0.7
 AREA_LOWER_THRESHOLD = 0.1
 AREA_UPPER_THRESHOLD = 0.99
+HASH_TOLERANCE = 8
+REFERENCE_WIDTH = 265
+REFERENCE_HEIGHT = 370
+INPUT_FILEPATH = "input"
+DICT_FILEPATH = "dicts"
+REFERENCE_FILEPATH = "modern horizons"
 
 def rotate_image(image, angle):
     # Grab the dimensions of the image and then determine the center
@@ -115,19 +124,79 @@ def find_cards(frame):
                 # directly warp the rotated rectangle to get the straightened rectangle
                 warped = cv2.warpPerspective(frame, M, (width, height))
                 roi.append(warped)
-                resized = cv2.resize(warped, (int(warped.shape[1]/4), int(warped.shape[0]/4)))
-                cv2.imshow("ROI" + str(ROI_number), resized)
+                resized = cv2.resize(warped, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+                #cv2.imshow("ROI" + str(ROI_number), resized)
 
             #cv2.drawContours(frame, [c], 0, (36, 255, 12), 3)
     return frame, roi
 
+def dhash(image, hashSize=5):
+	# resize the input image
+	resized = cv2.resize(image, (hashSize + 2, hashSize))
+	# compute the (relative) horizontal gradient between adjacent
+	# column pixels
+	diff = resized[:, 1:] > resized[:, :-1]
+	# convert the difference image to a hash
+	return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
+
 def analyze_ROI(roi):
     for r in roi: 
 
-        hash = imagehash.average_hash(roi)
-        #for hashcode in hashcode list:
-            #retval	=	cv2.img_hash_ImgHashBase.compare(hashOne, hashTwo)
+        # #tesseract attempt
+        # resized = cv2.resize(r, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+        # crop_img = resized[0:50, 0: REFERENCE_WIDTH-50]
+        # print(pytesseract.image_to_string(crop_img))
+        # cv2.imshow("cropped", crop_img)
+        # cv2.waitKey(0)
 
+        current = cv2.cvtColor(r, cv2.COLOR_BGR2BGRA)
+        current = cv2.resize(current, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+        # cv2.imshow("current", current)
+        # cv2.waitKey(0)
+        
+        im_pil = Image.fromarray(current)
+        imageHash = imagehash.average_hash(im_pil)
+        # for filename in os.listdir(REFERENCE_FILEPATH):
+        #     # img = cv2.imread(os.path.join(REFERENCE_FILEPATH,filename))
+        #     otherhash = imagehash.average_hash(Image.open(REFERENCE_FILEPATH+"/"+filename))
+        #     #print(hash-otherhash)
+        #     if hash-otherhash < 7:
+        #         img = cv2.imread(os.path.join(REFERENCE_FILEPATH,filename))
+        #         cv2.imshow("found", img)
+        #         cv2.imshow("roi", current)
+        #         cv2.waitKey(0)
+
+        #imageHash = dhash(current)
+        # imageHash = cv2.img_hash.averageHash(current)
+        # reference = cv2.imread("modern horizons/en_YqZ34vWHL8.png")
+        # referece = cv2.cvtColor(reference, cv2.COLOR_BGR2BGRA)
+        # print(imageHash-cv2.img_hash.averageHash(referece))
+
+        haystack = {}
+
+        with open(DICT_FILEPATH+"/modern_horizons.json") as json_file:
+            haystack = json.load(json_file)
+
+        min_dif = 100
+        closest_card = ""
+        
+        for hash in haystack:
+            difference = abs(imageHash-imagehash.hex_to_hash(hash))
+            if difference < min_dif:
+                min_dif = difference
+                closest_card = str(haystack[hash])
+
+            #print(difference)
+            
+        if min_dif < HASH_TOLERANCE:
+                # print(haystack[hash])
+                print("this card is: " + closest_card)
+                cv2.imshow("card", current)
+                cv2.waitKey(0)
+        # else:
+        #     print("no matches found. closest match: " + closest_card + " with a difference of: " + str(min_dif))
+
+        #print()
 
 def video_capture():
     cap = cv2.VideoCapture(0)
@@ -149,15 +218,16 @@ def video_capture():
     cv2.destroyAllWindows()
 
 def image_input():
-    img = cv2.imread("uncomfortable_chill.jpg")
-    resized_original = cv2.resize(img, (int(img.shape[1]/4), int(img.shape[0]/4)))
-    cv2.imshow('original', resized_original)
-    image, roi = find_cards(img)
-    resized = cv2.resize(image, (int(image.shape[1]/4), int(image.shape[0]/4)))
-    cv2.imshow('frame', resized)
-    analyze_ROI(roi)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    for filename in os.listdir(INPUT_FILEPATH):
+        img = cv2.imread(os.path.join(INPUT_FILEPATH,filename))
+        resized_original = cv2.resize(img, (int(img.shape[1]/4), int(img.shape[0]/4)))
+        #cv2.imshow('original', resized_original)
+        image, roi = find_cards(img)
+        resized = cv2.resize(image, (int(image.shape[1]/4), int(image.shape[0]/4)))
+        # cv2.imshow('frame', resized)
+        analyze_ROI(roi)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
 
 def main():
     #video_capture()
