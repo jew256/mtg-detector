@@ -7,8 +7,8 @@ import os
 import pytesseract 
 
 ASPECT_THRESHOLD = 0.7
-AREA_LOWER_THRESHOLD = 0.1
-AREA_UPPER_THRESHOLD = 0.99
+AREA_LOWER_THRESHOLD = 0.05
+AREA_UPPER_THRESHOLD = 0.98
 HASH_TOLERANCE = 8
 REFERENCE_WIDTH = 265
 REFERENCE_HEIGHT = 370
@@ -82,7 +82,7 @@ def perspective_transform(image, corners):
 
 def find_cards(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(gray, 50, 255, 0)
+    ret, thresh = cv2.threshold(gray, 100, 255, 0)
 
     #edges = cv2.Canny(thresh,100,200)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -123,21 +123,15 @@ def find_cards(frame):
 
                 # directly warp the rotated rectangle to get the straightened rectangle
                 warped = cv2.warpPerspective(frame, M, (width, height))
+                #cv2.imshow("warped", warped)
+                #cv2.waitKey(0)
                 roi.append(warped)
-                resized = cv2.resize(warped, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+                # resized = cv2.resize(warped, (REFERENCE_WIDTH, REFERENCE_HEIGHT))qq
+                
                 #cv2.imshow("ROI" + str(ROI_number), resized)
 
             #cv2.drawContours(frame, [c], 0, (36, 255, 12), 3)
     return frame, roi
-
-def dhash(image, hashSize=5):
-	# resize the input image
-	resized = cv2.resize(image, (hashSize + 2, hashSize))
-	# compute the (relative) horizontal gradient between adjacent
-	# column pixels
-	diff = resized[:, 1:] > resized[:, :-1]
-	# convert the difference image to a hash
-	return sum([2 ** i for (i, v) in enumerate(diff.flatten()) if v])
 
 def analyze_ROI(roi):
     for r in roi: 
@@ -149,50 +143,36 @@ def analyze_ROI(roi):
         # cv2.imshow("cropped", crop_img)
         # cv2.waitKey(0)
 
-        current = cv2.cvtColor(r, cv2.COLOR_BGR2BGRA)
-        current = cv2.resize(current, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+        #current = cv2.cvtColor(r, cv2.COLOR_BGR2GRAY)
+        current = cv2.resize(r, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
         # cv2.imshow("current", current)
         # cv2.waitKey(0)
         
         im_pil = Image.fromarray(current)
         imageHash = imagehash.average_hash(im_pil)
-        # for filename in os.listdir(REFERENCE_FILEPATH):
-        #     # img = cv2.imread(os.path.join(REFERENCE_FILEPATH,filename))
-        #     otherhash = imagehash.average_hash(Image.open(REFERENCE_FILEPATH+"/"+filename))
-        #     #print(hash-otherhash)
-        #     if hash-otherhash < 7:
-        #         img = cv2.imread(os.path.join(REFERENCE_FILEPATH,filename))
-        #         cv2.imshow("found", img)
-        #         cv2.imshow("roi", current)
-        #         cv2.waitKey(0)
-
-        #imageHash = dhash(current)
-        # imageHash = cv2.img_hash.averageHash(current)
-        # reference = cv2.imread("modern horizons/en_YqZ34vWHL8.png")
-        # referece = cv2.cvtColor(reference, cv2.COLOR_BGR2BGRA)
-        # print(imageHash-cv2.img_hash.averageHash(referece))
-
-        haystack = {}
-
-        with open(DICT_FILEPATH+"/modern_horizons.json") as json_file:
-            haystack = json.load(json_file)
 
         min_dif = 100
         closest_card = ""
-        
-        for hash in haystack:
-            difference = abs(imageHash-imagehash.hex_to_hash(hash))
-            if difference < min_dif:
-                min_dif = difference
-                closest_card = str(haystack[hash])
 
-            #print(difference)
+        for filename in os.listdir(DICT_FILEPATH):
+            haystack = {}
+            with open(DICT_FILEPATH+"/"+filename) as json_file:
+                haystack = json.load(json_file)
+            for hash in haystack:
+                difference = abs(imageHash-imagehash.hex_to_hash(hash))
+                if difference < min_dif:
+                    min_dif = difference
+                    closest_card = str(haystack[hash])
             
         if min_dif < HASH_TOLERANCE:
                 # print(haystack[hash])
                 print("this card is: " + closest_card)
+                x = 10
+                y = int(REFERENCE_HEIGHT/2)
+                current = cv2.rectangle(current,(x, y-20),(REFERENCE_WIDTH-x,y+20),(255,255,255),-1)
+                current = cv2.putText(current, closest_card, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA) 
                 cv2.imshow("card", current)
-                cv2.waitKey(0)
+                #cv2.waitKey(0)
         # else:
         #     print("no matches found. closest match: " + closest_card + " with a difference of: " + str(min_dif))
 
@@ -207,7 +187,7 @@ def video_capture():
 
         # operations on the frame
         image, roi = find_cards(frame)
-
+        analyze_ROI(roi)
         # Display the resulting frame
         cv2.imshow('frame',image)
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -230,8 +210,8 @@ def image_input():
         #cv2.destroyAllWindows()
 
 def main():
-    #video_capture()
-    image_input()
+    video_capture()
+    #image_input()
 
 if __name__ == "__main__":
     main()
