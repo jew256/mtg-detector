@@ -4,10 +4,12 @@ import cv2
 import imagehash
 import json
 import os
+import urllib.request
+import time
 import pytesseract 
 
 ASPECT_THRESHOLD = 0.7
-AREA_LOWER_THRESHOLD = 0.05
+AREA_LOWER_THRESHOLD = 0.025
 AREA_UPPER_THRESHOLD = 0.98
 HASH_TOLERANCE = 8
 REFERENCE_WIDTH = 265
@@ -15,6 +17,10 @@ REFERENCE_HEIGHT = 370
 INPUT_FILEPATH = "input"
 DICT_FILEPATH = "dicts"
 REFERENCE_FILEPATH = "modern horizons"
+CARD_FILEPATH = "card_info"
+
+current_board = []
+api_url = "https://api.scryfall.com/cards/named?fuzzy="
 
 def rotate_image(image, angle):
     # Grab the dimensions of the image and then determine the center
@@ -134,6 +140,8 @@ def find_cards(frame):
     return frame, roi
 
 def analyze_ROI(roi):
+    roi_index = 0
+    cards_this_frame = []
     for r in roi: 
 
         # #tesseract attempt
@@ -162,21 +170,81 @@ def analyze_ROI(roi):
                 difference = abs(imageHash-imagehash.hex_to_hash(hash))
                 if difference < min_dif:
                     min_dif = difference
-                    closest_card = str(haystack[hash])
+                    closest_card = str(haystack[hash][0])
             
         if min_dif < HASH_TOLERANCE:
-                # print(haystack[hash])
+            # print(haystack[hash])
+            if closest_card not in cards_this_frame:
+                cards_this_frame.append(closest_card)
                 print("this card is: " + closest_card)
                 x = 10
                 y = int(REFERENCE_HEIGHT/2)
                 current = cv2.rectangle(current,(x, y-20),(REFERENCE_WIDTH-x,y+20),(255,255,255),-1)
                 current = cv2.putText(current, closest_card, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA) 
-                cv2.imshow("card", current)
-                #cv2.waitKey(0)
-        # else:
-        #     print("no matches found. closest match: " + closest_card + " with a difference of: " + str(min_dif))
+                cv2.imshow("card_"+str(roi_index), current)
+                #cv2.moveWindow("card_"+str(roi_index), roi_index*REFERENCE_WIDTH, 0)
 
-        #print()
+                #manually check this card is correct
+                confirmation = input("is this card " + closest_card + "? y/n \t")
+
+                if confirmation == 'y':
+                    #find data about card (must not happen more than 10 times per second)
+                    words = closest_card.split()
+                    url_ending = ""
+                    for word in words:
+                        url_ending+=word+"-"
+                    url_ending = url_ending[:-1]
+                    response = urllib.request.urlopen(api_url+url_ending)
+                    data = json.loads(response.read())
+                    output_path = os.path.join("card_info", closest_card+".json")
+                    with open (output_path, "w") as f:
+                        json.dump(data, f)
+                    time.sleep(0.1)
+                    parse_card_info(closest_card)
+                    #exit()
+
+                
+        roi_index+=1
+    #cv2.destroyAllWindows()
+
+def url_to_image(url):
+	# download the image, convert it to a NumPy array, and then read
+	# it into OpenCV format
+	resp = urllib.request.urlopen(url)
+	image = np.asarray(bytearray(resp.read()), dtype="uint8")
+	image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+	# return the image
+	return image
+
+def parse_card_info(closest_card):
+    #card_info = {}
+    with open(CARD_FILEPATH+"/"+closest_card+".json") as json_file:
+        card_info = json.load(json_file)
+
+    #display card
+    image = url_to_image(card_info["image_uris"]["png"])
+    time.sleep(0.1) #delay per api rules
+    cv2.imshow("card", image)
+    
+
+    #return color
+    colors = card_info["colors"]
+    print("this card's colors are: " + str(colors))
+
+    #return cost
+    cost = card_info["mana_cost"]
+    print("this card's cost is: " + str(cost))
+
+    #return cmc
+    cmc = card_info["cmc"]
+    print("thi card's cmc is: " + str(cmc))
+
+    #return oracle text
+    effect = card_info["oracle_text"]
+    print("text: " + str(effect))
+
+    cv2.waitKey(0)
+
 
 def video_capture():
     cap = cv2.VideoCapture(0)
@@ -206,6 +274,8 @@ def image_input():
         resized = cv2.resize(image, (int(image.shape[1]/4), int(image.shape[0]/4)))
         # cv2.imshow('frame', resized)
         analyze_ROI(roi)
+        cv2.imshow('frame',image)
+        cv2.waitKey(0)
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
 

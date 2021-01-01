@@ -69,10 +69,10 @@ class SetSpider(scrapy.Spider):
         names = process_names(names)
         links = process_links(links)
         # print(len(links))
-        for link in links:
-            name = names.pop(0)
-            link = links.pop(0)
-            #print(names.pop(0) + "      " + links.pop(0))
+        for i in range(len(names)):
+            name = names[i]
+            link = links[i]
+            #print(name)
             imageHash = hash(name, link)
             l = set_dict.get(imageHash, [])
             l.append(name)
