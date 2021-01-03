@@ -6,7 +6,9 @@ import json
 import os
 import urllib.request
 import time
+import sys
 import pytesseract 
+from os import path
 
 ASPECT_THRESHOLD = 0.7
 AREA_LOWER_THRESHOLD = 0.025
@@ -133,7 +135,6 @@ def find_cards(frame):
                 #cv2.waitKey(0)
                 roi.append(warped)
                 # resized = cv2.resize(warped, (REFERENCE_WIDTH, REFERENCE_HEIGHT))qq
-                
                 #cv2.imshow("ROI" + str(ROI_number), resized)
 
             #cv2.drawContours(frame, [c], 0, (36, 255, 12), 3)
@@ -182,24 +183,27 @@ def analyze_ROI(roi):
                 current = cv2.rectangle(current,(x, y-20),(REFERENCE_WIDTH-x,y+20),(255,255,255),-1)
                 current = cv2.putText(current, closest_card, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA) 
                 cv2.imshow("card_"+str(roi_index), current)
+
                 #cv2.moveWindow("card_"+str(roi_index), roi_index*REFERENCE_WIDTH, 0)
 
                 #manually check this card is correct
                 confirmation = input("is this card " + closest_card + "? y/n \t")
+                #confirmation = "y"
 
                 if confirmation == 'y':
                     #find data about card (must not happen more than 10 times per second)
-                    words = closest_card.split()
-                    url_ending = ""
-                    for word in words:
-                        url_ending+=word+"-"
-                    url_ending = url_ending[:-1]
-                    response = urllib.request.urlopen(api_url+url_ending)
-                    data = json.loads(response.read())
-                    output_path = os.path.join("card_info", closest_card+".json")
-                    with open (output_path, "w") as f:
-                        json.dump(data, f)
-                    time.sleep(0.1)
+                    if not path.exists(CARD_FILEPATH+"/"+closest_card+".json"):
+                        words = closest_card.split()
+                        url_ending = ""
+                        for word in words:
+                            url_ending+=word+"-"
+                        url_ending = url_ending[:-1]
+                        response = urllib.request.urlopen(api_url+url_ending)
+                        data = json.loads(response.read())
+                        output_path = os.path.join("card_info", closest_card+".json")
+                        with open (output_path, "w") as f:
+                            json.dump(data, f)
+                        time.sleep(0.1)
                     parse_card_info(closest_card)
                     #exit()
 
@@ -225,6 +229,7 @@ def parse_card_info(closest_card):
     image = url_to_image(card_info["image_uris"]["png"])
     time.sleep(0.1) #delay per api rules
     cv2.imshow("card", image)
+    #print(card_info["image_uris"]["png"])
     
 
     #return color
@@ -237,13 +242,14 @@ def parse_card_info(closest_card):
 
     #return cmc
     cmc = card_info["cmc"]
-    print("thi card's cmc is: " + str(cmc))
+    print("this card's cmc is: " + str(cmc))
 
     #return oracle text
     effect = card_info["oracle_text"]
     print("text: " + str(effect))
 
     cv2.waitKey(0)
+    sys.stdout.flush()
 
 
 def video_capture():
@@ -279,9 +285,16 @@ def image_input():
         #cv2.waitKey(0)
         #cv2.destroyAllWindows()
 
+def server_input():
+    frame = sys.argv[1]
+    #frame = np.float32(frame)
+    image, roi = find_cards(frame)
+    analyze_ROI(roi)
+
 def main():
-    video_capture()
+    #video_capture()
     #image_input()
+    server_input()
 
 if __name__ == "__main__":
     main()

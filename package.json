@@ -1,0 +1,31 @@
+{
+  "name": "mtg-detector",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "devStart": "nodemon server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jew256/mtg-detector.git"
+  },
+  "author": "Jack Williamson",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jew256/mtg-detector/issues"
+  },
+  "homepage": "https://github.com/jew256/mtg-detector#readme",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "ejs": "^3.1.5",
+    "express": "^4.17.1",
+    "opencv4nodejs": "^5.6.0",
+    "python-shell": "^2.0.3",
+    "socket.io": "^3.0.4",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.6"
+  }
+}
