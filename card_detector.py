@@ -1,4 +1,9 @@
 from PIL import Image
+from flask import Flask, render_template, Response, request
+from flask_socketio import SocketIO
+from flask_socketio import send, emit
+#from flask_session import Session
+from os import path
 import numpy as np
 import cv2
 import imagehash
@@ -7,11 +12,17 @@ import os
 import urllib.request
 import time
 import sys
-import pytesseract 
-from os import path
+import base64
+import itertools
+
+#TODO: make card images clickable to view information - a task not suitable for flask?
+#TODO: make actual virtual board for cards to sit on: able to drag them around to reposition
+#TODO: implement life counter
+#TODO: instead of one host. make clients able to log into rooms on server to play games
+#TODO: more than 2 clients at once. display up to 4 playing boards at the same time
 
 ASPECT_THRESHOLD = 0.7
-AREA_LOWER_THRESHOLD = 0.025
+AREA_LOWER_THRESHOLD = 0.03
 AREA_UPPER_THRESHOLD = 0.98
 HASH_TOLERANCE = 8
 REFERENCE_WIDTH = 265
@@ -20,32 +31,167 @@ INPUT_FILEPATH = "input"
 DICT_FILEPATH = "dicts"
 REFERENCE_FILEPATH = "modern horizons"
 CARD_FILEPATH = "card_info"
+CARD_BACK = "https://media.magic.wizards.com/image_legacy_migration/magic/images/mtgcom/fcpics/making/mr224_back.jpg"
 
-current_board = []
 api_url = "https://api.scryfall.com/cards/named?fuzzy="
+current_board = []
+# current_card = ""
+#global current_card #placeholder img
 
-def rotate_image(image, angle):
-    # Grab the dimensions of the image and then determine the center
-    (h, w) = image.shape[:2]
-    (cX, cY) = (w / 2, h / 2)
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app)
+socketio.init_app(app, cors_allowed_origins="*")
 
-    # grab the rotation matrix (applying the negative of the
-    # angle to rotate clockwise), then grab the sine and cosine
-    # (i.e., the rotation components of the matrix)
-    M = cv2.getRotationMatrix2D((cX, cY), -angle, 1.0)
-    cos = np.abs(M[0, 0])
-    sin = np.abs(M[0, 1])
 
-    # Compute the new bounding dimensions of the image
-    nW = int((h * sin) + (w * cos))
-    nH = int((h * cos) + (w * sin))
+@app.route('/', methods=['POST', 'GET'])
+def index():
+    if request.method == 'POST':
+        if request.form['submit_button'] == 'Add Card':
+            stringData=add_card()
+            if stringData != "":
+                return render_template('index.html', board=stringData)
+        elif request.form['submit_button'] == 'Delete Card':
+            text = request.form['text']
+            stringData=delete_card(text)
+            if stringData != "":
+                return render_template('index.html', board=stringData)
+    return render_template('index.html')
 
-    # Adjust the rotation matrix to take into account translation
-    M[0, 2] += (nW / 2) - cX
-    M[1, 2] += (nH / 2) - cY
+def add_card():
+    f = open("current_card.txt")
+    current_card = f.read()
+    f.close()
+    if current_card == "":
+        return ""
+    current_board.append(current_card)
+    board = create_board(current_board)
+    r, cnt = cv2.imencode('.jpg',board)
+    stringData = base64.b64encode(cnt).decode('utf-8')
+    b64_src = 'data:image/jpg;base64,'
+    stringData = b64_src + stringData
+    return stringData
+    
+def delete_card(card_name):
+    for filename in os.listdir(CARD_FILEPATH):
+        if filename == card_name + ".json":
+            with open(CARD_FILEPATH+"/"+filename) as json_file:
+                card_info = json.load(json_file)
+            image = card_info["image_uris"]["png"]
+            if image in current_board:
+                current_board.remove(image)            
+                print("removed: " + card_name)
+    if len(current_board) > 0:
+        board = create_board(current_board)
+        r, cnt = cv2.imencode('.jpg',board)
+        stringData = base64.b64encode(cnt).decode('utf-8')
+        b64_src = 'data:image/jpg;base64,'
+        stringData = b64_src + stringData
+        return stringData
+    return ""
 
-    # Perform the actual rotation and return the image
-    return cv2.warpAffine(image, M, (nW, nH))
+def vconcat_resize_min(im_list, interpolation=cv2.INTER_CUBIC):
+    w_min = min(im.shape[1] for im in im_list)
+    im_list_resize = [cv2.resize(im, (w_min, int(im.shape[0] * w_min / im.shape[1])), interpolation=interpolation)
+                      for im in im_list]
+    return cv2.vconcat(im_list_resize)
+
+def hconcat_resize_min(im_list, interpolation=cv2.INTER_CUBIC):
+    h_min = min(im.shape[0] for im in im_list)
+    im_list_resize = [cv2.resize(im, (h_min, int(im.shape[1] * h_min / im.shape[0])), interpolation=interpolation)
+                      for im in im_list]
+    return cv2.hconcat(im_list_resize)
+
+def create_board(current_board):
+    board_images = []
+    for url in current_board:
+        board_images.append(url_to_image(url))
+    margin = 20 #Margin between pictures in pixels
+    w = 5 # Width of the matrix (nb of images)
+    h = int(len(board_images)/w) # Height of the matrix (nb of images)
+    if len(board_images)%w != 0:
+        h+=1
+    n = w*h
+
+    #Define the margins in x and y directions
+    m_x = margin
+    m_y = margin
+
+    #Define the shape of the image to be replicated (all images should have the same shape)
+    img_h, img_w, img_c = board_images[0].shape
+
+
+    #Size of the full size image
+    mat_x = img_w * w + m_x * (w - 1)
+    mat_y = img_h * h + m_y * (h - 1)
+
+    #Create a matrix of zeros of the right size and fill with 255 (so margins end up white)
+    imgmatrix = np.zeros((mat_y, mat_x, img_c),np.uint8)
+    imgmatrix.fill(255)
+
+    #Prepare an iterable with the right dimensions
+    positions = itertools.product(range(h), range(w))
+
+    for (y_i, x_i), card in zip(positions, board_images):
+        x = x_i * (img_w + m_x)
+        y = y_i * (img_h + m_y)
+        imgmatrix[y:y+img_h, x:x+img_w, :] = card
+
+    resized = cv2.resize(imgmatrix, (mat_x//3,mat_y//3), interpolation = cv2.INTER_AREA)
+    return resized
+
+camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
+def gen_frames():  
+    while True:
+        success, frame = camera.read()  # read the camera frame
+        if not success:
+            break
+        else:
+            image, roi = find_cards(frame)
+            urls = analyze_ROI(roi)
+            #urls.append("https://c1.scryfall.com/file/scryfall-cards/png/front/8/3/83298c8a-02c4-4ada-9a41-4b973bb58ac6.png?1562201132")
+            if urls:
+                with app.test_request_context('/'):
+                    socketio.emit('data', urls[0])
+
+                f = open("current_card.txt", "w")
+                f.truncate(0)
+                f.write(urls[0])
+                f.close()
+
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n') 
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# def rotate_image(image, angle):
+#     # Grab the dimensions of the image and then determine the center
+#     (h, w) = image.shape[:2]
+#     (cX, cY) = (w / 2, h / 2)
+
+#     # grab the rotation matrix (applying the negative of the
+#     # angle to rotate clockwise), then grab the sine and cosine
+#     # (i.e., the rotation components of the matrix)
+#     M = cv2.getRotationMatrix2D((cX, cY), -angle, 1.0)
+#     cos = np.abs(M[0, 0])
+#     sin = np.abs(M[0, 1])
+
+#     # Compute the new bounding dimensions of the image
+#     nW = int((h * sin) + (w * cos))
+#     nH = int((h * cos) + (w * sin))
+
+#     # Adjust the rotation matrix to take into account translation
+#     M[0, 2] += (nW / 2) - cX
+#     M[1, 2] += (nH / 2) - cY
+
+#     # Perform the actual rotation and return the image
+#     return cv2.warpAffine(image, M, (nW, nH))
+
+
 
 def perspective_transform(image, corners):
     def order_corner_points(corners):
@@ -143,6 +289,7 @@ def find_cards(frame):
 def analyze_ROI(roi):
     roi_index = 0
     cards_this_frame = []
+    urls = []
     for r in roi: 
 
         # #tesseract attempt
@@ -182,7 +329,7 @@ def analyze_ROI(roi):
                 y = int(REFERENCE_HEIGHT/2)
                 current = cv2.rectangle(current,(x, y-20),(REFERENCE_WIDTH-x,y+20),(255,255,255),-1)
                 current = cv2.putText(current, closest_card, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA) 
-                cv2.imshow("card_"+str(roi_index), current)
+                #cv2.imshow("card_"+str(roi_index), current)
 
                 #cv2.moveWindow("card_"+str(roi_index), roi_index*REFERENCE_WIDTH, 0)
 
@@ -204,12 +351,13 @@ def analyze_ROI(roi):
                         with open (output_path, "w") as f:
                             json.dump(data, f)
                         time.sleep(0.1)
-                    parse_card_info(closest_card)
+                    urls.append(parse_card_info(closest_card))
                     #exit()
 
                 
         roi_index+=1
     #cv2.destroyAllWindows()
+    return urls
 
 def url_to_image(url):
 	# download the image, convert it to a NumPy array, and then read
@@ -228,9 +376,7 @@ def parse_card_info(closest_card):
     #display card
     image = url_to_image(card_info["image_uris"]["png"])
     time.sleep(0.1) #delay per api rules
-    cv2.imshow("card", image)
-    #print(card_info["image_uris"]["png"])
-    
+    #cv2.imshow("card", image)    
 
     #return color
     colors = card_info["colors"]
@@ -248,8 +394,7 @@ def parse_card_info(closest_card):
     effect = card_info["oracle_text"]
     print("text: " + str(effect))
 
-    cv2.waitKey(0)
-    sys.stdout.flush()
+    return card_info["image_uris"]["png"]
 
 
 def video_capture():
@@ -287,14 +432,14 @@ def image_input():
 
 def server_input():
     frame = sys.argv[1]
-    #frame = np.float32(frame)
+    frame = np.float32(frame)
     image, roi = find_cards(frame)
     analyze_ROI(roi)
 
 def main():
-    #video_capture()
+    video_capture()
     #image_input()
-    server_input()
+    #server_input()
 
 if __name__ == "__main__":
-    main()
+    socketio.run(app)

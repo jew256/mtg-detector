@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<title> MTG Card Detector </title>
+{% endblock %}
+
+{% block body %}
+
+<table>
+    <tr>
+        <th>Live Feed</th>
+        <th>Add New Card</th>
+    </tr>
+    <tr>
+        <td>
+            <img src="{{ url_for('video_feed') }}" width="100%">
+        </td>
+        <td>
+            <img id = "image1">
+            <script src = "https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
+            <script>
+                var socket = io.connect();
+                socket.on('data', (data) => {
+                    const imageElm = document.getElementById('image1');
+                    //imageElm.src = `data:image/jpeg;base64,${image}`;
+                    imageElm.src = data;
+                });
+                // socket.on('create_board', (data) => {
+                //     const imageElm2 = document.getElementById('image2');
+                //     //imageElm.src = `data:image/jpeg;base64,${image}`;
+                //     imageElm2.src = data;
+                // });
+            </script>
+            
+            <div class="form">
+                <form action="/" method="POST">
+                    <input type="submit" name="submit_button" value="Add Card">
+                    <label for="delete">Name of Card to Delete</label>
+                    <input id="delete" type="text" name="text">
+                    <input type="submit" name="submit_button" value="Delete Card">
+                </form>
+            </div>
+            
+        </td>
+    </tr>
+    <tr>
+        <td>
+            Current Board:
+            <img src = "{{board}}">
+        </td>
+    </tr>
+    
+</table>
+
+{% endblock %}
