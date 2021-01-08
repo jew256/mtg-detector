@@ -63,6 +63,10 @@ Note: the program is better suited to handle slight counter-clockwise rotations,
 
 ![finding_roi](https://github.com/jew256/mtg-detector/blob/master/README_images/finding_card.png?raw=true)
 
+#### Dec 28, 2020: Detection by hashing
+
+![hashing_detection](https://github.com/jew256/mtg-detector/blob/master/README_images/hashing_detection.png?raw=true)
+
 ### Web Crawler
 
 ### Hosting on a Server
