@@ -1,5 +1,11 @@
 # Magic the Gathering Card Detector
 
+## Purpose
+
+This project is intended to provide a visual tool for playing the trading card game Magic: the Gathering with physical cards online with someone else.\
+There are different forms of online magic already, but this project would allow personal collections of cards to be used, without the difficulty of reading cards from another's webcam feed. \
+Instead of a fuzzy image of your opponent's board, this program creates a virtual playing board to easier view each card on their physical board. 
+
 ## Set up
 
 ### Download and Setup
@@ -27,6 +33,16 @@ Unless an excellent camera is used, the hash of your input could be even more si
 
 
 ### Hosting
+
+In its current state, this program only provides a one-way service where the host submits cards to the server and someone else can remote into the server to view\
+For both players to view each other's board, in the current state each player must have an instance of the program running locally.\
+To host, an additional tunneling program program is required to project the local server.\
+For this project, localtunnel is recommended. Ngrok is not recommended because of its limit to connections often maxes out when adding new cards to the board.
+
+1. install localtunnel `npm install -g localtunnel`
+2. host on port 5000 `lt --port 5000`
+3. run card_detector.py to start the local server `pythyon3 card_detector.py`
+4. copy the url from localtunnel and send to your opponent for them to view your board
 
 ## Development History
 
