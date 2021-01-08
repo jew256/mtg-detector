@@ -22,7 +22,7 @@ Unless an excellent camera is used, the hash of your input could be even more si
 3. The name of the set is not entirely necessary, but its acts as a descriptor when removing unneeded sets in the future
 4. The url for the set can be founded by searching online by searching for "[name of set] card list" and clicking the link by Wizards of the Coast
 5. run hashing.py with the above two arguments to add all cards of that set to the reference pool. nothing else is required
-    * example: python3 hashing.py -a "Modern Horizons" -b "https://magic.wizards.com/en/products/modernhorizons/cards"\
+    * example: python3 hashing.py -a "Modern Horizons" -b "https://magic.wizards.com/en/products/modernhorizons/cards" \
     will add the "Modern Horizons.json" to the dicts folder, and all cards from the set will be added to the reference pool
 
 
