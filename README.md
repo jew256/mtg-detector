@@ -46,6 +46,27 @@ For this project, localtunnel is recommended. Ngrok is not recommended because o
 
 ## Development History
 
+### Card Detection
+
+At first I had hoped to find a card detection algorithm online to adapt to my purposes, but I was unable to find anything suitable for what I wanted. 
+However, this program's card detection algorithm takes inspiration from [Timo Ikonen's card detector](https://tmikonen.github.io/quantitatively/2020-01-01-magic-card-detector/), but is less involved in pre-processing to maintain speed for the user experience.\
+In addition, the scope of this project assumes more ideal conditions than he accounts for.\
+The Hashing approach is similar, but I ran into the issue of compiling the necessary references to run the algorithm on any card wanted.\
+
+#### Dec 27, 2020: Finding Regions of Interest (ROI)
+
+I first started with determining the regions of interest from the camera frame. No frame will be perfect, so the first step is to separate just the card from the image before hashing.
+
+openCV is used for all operations on the frame and a few methods for finding the bounding rectangle (because every card is a rectangle), adjusting for rotation, and setting bounds for the size of the card all serve to separate the card from the frame.
+
+Note: the program is better suited to handle slight counter-clockwise rotations, but not clockwise rotations
+
+![finding_roi](https://github.com/jew256/mtg-detector/blob/master/README_images/finding_card.png?raw=true)
+
+### Web Crawler
+
+### Hosting on a Server
+
 ## Current State
 
 ## Future Development
