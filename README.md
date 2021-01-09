@@ -36,7 +36,7 @@ Unless an excellent camera is used, the hash of your input could be even more si
 
 In its current state, this program only provides a one-way service where the host submits cards to the server and someone else can remote into the server to view\
 For both players to view each other's board, in the current state each player must have an instance of the program running locally.\
-To host, an additional tunneling program program is required to project the local server.\
+To host, an additional tunneling program is required to project the local server.\
 For this project, localtunnel is recommended. Ngrok is not recommended because of its limit to connections often maxes out when adding new cards to the board.
 
 1. install localtunnel `npm install -g localtunnel`
@@ -65,12 +65,87 @@ Note: the program is better suited to handle slight counter-clockwise rotations,
 
 #### Dec 28, 2020: Detection by hashing
 
+After separating the card from the image, a [hash](https://pypi.org/project/ImageHash/) is created and the difference between this hash and every card in the reference pool is taken. \
+If the minimum difference is less than the tolerance for a match, then the corresponding reference image is assumed to be the matching card.\
+In the image below, the program is reading a local image and comparing the card's hash to that of a few reference images.
+
 ![hashing_detection](https://github.com/jew256/mtg-detector/blob/master/README_images/hashing_detection.png?raw=true)
+
+#### Dec 29, 2020: Video Input
+
+After detecting the card from a single image, the next step is detecting a card in each frame of a video feed.\
+openCV is used to open the camera and read in each frame. The same algorithm is applied to each individual frame, relating it to reference images.
+
+[![Watch the video](https://img.youtube.com/vi/vKajeu5hVDo/maxresdefault.jpg)](https://youtu.be/vKajeu5hVDo)
 
 ### Web Crawler
 
+#### Dec 30, 2020: Building Set Dictionaries
+
+Manually inputing every card for the reference set is unreasonable, so I built a web crawler to store every card's hash and name in a dictionary for every published set.\
+This separate program builds a dictionary for these sets, and must be called for every set of cards required to be added.\
+This approach also helps efficiency because instead of hashing every image in the reference set, those hashes are already created and can be referenced.\
+The below image is detecting the card "Timberland Guide" with a reference set of "Modern Horizons" and "Iconic Masters"
+
+[![Watch the video](https://img.youtube.com/vi/9oSt3JxGmKE/maxresdefault.jpg)](https://youtu.be/9oSt3JxGmKE)
+
+#### Dec 30, 2020: Recognizing Multiple Cards
+
+At first I believed that the program would take a frame from a playing board and build the entire virtual board every frame, so there would be no input from the user.\
+Thus, I developed multiple-card recognition in, but later realized that this approach would be too computationally intense, as well as unreasonable for extremely cluttered boards.\
+In the current state, the program requires the user to place their card underneath a camera, then add the card to their board.
+
+![2_cards](https://github.com/jew256/mtg-detector/blob/master/README_images/2_cards.png?raw=true)
+
+### API Integration
+
+#### Jan 1, 2021: Acquiring Card Info
+
+Once the card is detected, I wanted to provide the user with any information about the card that they hoped for.\
+Thus, I integrated the program with the [Scryfall API](https://scryfall.com/docs/api) to request any information about the card.\
+In the current state, the client cannot view this information, but I plan to provide it in a future version with card interaction.
+
+![api_integration](https://github.com/jew256/mtg-detector/blob/master/README_images/api_integration.png?raw=true)
+
 ### Hosting on a Server
 
-## Current State
+#### Jan 5, 2021: Hosting with node.js
+
+I have no previous experience with hosting a server, so I first attempted hosting the project with [node.js](https://nodejs.org/en/)\
+This approach was somewhat successful, but implementing the python program to dynamically update the board and current card proved challenging.\
+However, in the video below, once the card was confirmed from the server side, the card would be added to the virtual board, shown below the life feed.
+
+[![Watch the video](https://img.youtube.com/vi/a_LgCiw03zk/maxresdefault.jpg)](https://youtu.be/a_LgCiw03zk)
+
+#### Jan 8, 2021: Shifting to Flask. Adding Add/Delete Options
+
+I decided that [flask](https://flask.palletsprojects.com/en/1.1.x/) would be more suitable for my purposes, as I am dealing with the images and variables directly from the python script.\
+In addition to the virtual board, I added a preview section of the card and add/delete buttons to manage the board state.\
+This is closer to the future goal of having each player build their board from a connection to the separate server.\
+The current board currently has no interacction, so a text field is used instead to delete particular cards from the board.
+
+[![Watch the video](https://img.youtube.com/vi/wv89BcE4I4I/maxresdefault.jpg)](https://youtu.be/wv89BcE4I4I)
 
 ## Future Development
+
+### Board Interaction
+
+I hope to have an interactive board for both players to use, so the experience is more fluid.\
+A few features of this interactive board are:
+    * Dragging the card images along a virtual board to rearrange them
+    * Clicking on a particular card to have a larger view and possibly some information about the card
+    * Displaying both boards with player names side-by-side so that both players can view their board as well as their opponent's
+
+### Game Amenities
+
+As this program is meant to allow players to play a game of Magic online, I hope to implement some of the features of a normal game.\
+These features include: 
+    * A life counter
+    * Different sided die
+    * Counters for card effects
+
+### Multi-Player Support
+
+### Visual Improvements
+
+### Deep Learning for Card Detection 
