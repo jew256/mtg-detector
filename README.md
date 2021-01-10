@@ -123,6 +123,11 @@ I decided that [flask](https://flask.palletsprojects.com/en/1.1.x/) would be mor
 In addition to the virtual board, I added a preview section of the card and add/delete buttons to manage the board state.\
 This is closer to the future goal of having each player build their board from a connection to the separate server.\
 The current board currently has no interacction, so a text field is used instead to delete particular cards from the board.
+Note: in the video a number of false positives are found and there are multiple instances of the found card.\
+These issues are a product of two factors, the lighting and hosting on flask.\
+The accuracy of the detection relies on the images taken being close to the lighting of the reference images, so in this video the lighting was different and thus the accuracy diminished.\
+As for the multiple instances of the card, I believe that the frames where the card is present on the board are stored and waiting in queue to be processed.\
+Thus, while the first frame displays the found card, there are still a few more frames with the card yet to be processed.
 
 [![Watch the video](https://img.youtube.com/vi/wv89BcE4I4I/maxresdefault.jpg)](https://youtu.be/wv89BcE4I4I)
 
