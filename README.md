@@ -140,6 +140,8 @@ A few features of this interactive board are:
     * Dragging the card images along a virtual board to rearrange them
     * Clicking on a particular card to have a larger view and possibly some information about the card
     * Displaying both boards with player names side-by-side so that both players can view their board as well as their opponent's
+    * Chat feature
+    * Graveyard and exile stacks
 
 ### Game Amenities
 
@@ -151,6 +153,19 @@ These features include:
 
 ### Multi-Player Support
 
+The end goal for this project is to have up to four (or potentially more) players join a unique room hosted by the server, and play with their virtual boards against one another.\
+Thus, one player could create a room and others would enter the room id to enter into the unique room and start a game.\
+This would require a large overhaul of the current system, and I'm not sure if flask would be sufficient to create this server as well as creating the interactive boards.\
+If need be, I can go back to node.js and try to get better communication between the server and the main program.
+
 ### Visual Improvements
 
+As this project is meant to work as entertainment for players, the interface needs improvement.\
+Once multi-player support is added, I will work on improving the visual interface to make the user experience more enjoyable.
+
 ### Deep Learning for Card Detection 
+
+Once all of the above improvements are added, I will return to the card detection algorithm.\
+While the card detection program is mostly accurate, there are definite improvements to be made because the raw difference between hashes can be quite volatile.\
+Thus, I hope to implement deep learning to train the algorithm to be closer to 100% accurate.\
+This would most likely mean adding every set of cards to the reference set, and if successful, would remove the need for adding or removing sets for accuracy.
