@@ -1,5 +1,5 @@
 from PIL import Image
-from flask import Flask, render_template, Response, request
+from flask import Flask, render_template, Response, request, redirect, url_for
 from flask_socketio import SocketIO
 from flask_socketio import send, emit
 #from flask_session import Session
@@ -22,27 +22,34 @@ import itertools
 #TODO: more than 2 clients at once. display up to 4 playing boards at the same time
 
 ASPECT_THRESHOLD = 0.7
-AREA_LOWER_THRESHOLD = 0.03
-AREA_UPPER_THRESHOLD = 0.98
+AREA_LOWER_THRESHOLD = 0.02
+AREA_UPPER_THRESHOLD = 0.5
 HASH_TOLERANCE = 8
 REFERENCE_WIDTH = 265
 REFERENCE_HEIGHT = 370
+REFRESH_RATE = 0.05
 INPUT_FILEPATH = "input"
 DICT_FILEPATH = "dicts"
-REFERENCE_FILEPATH = "modern horizons"
 CARD_FILEPATH = "card_info"
 CARD_BACK = "https://media.magic.wizards.com/image_legacy_migration/magic/images/mtgcom/fcpics/making/mr224_back.jpg"
+life = []
+life.append(40)
 
 api_url = "https://api.scryfall.com/cards/named?fuzzy="
 current_board = []
-# current_card = ""
-#global current_card #placeholder img
+current_card = []
+current_card.append("")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 socketio.init_app(app, cors_allowed_origins="*")
 
+camera = cv2.VideoCapture(0)
+print("camera opened")
+# success, frame = camera.read()
+# cv2.imshow("f", frame)
+# cv2.waitKey(0)
 
 @app.route('/', methods=['POST', 'GET'])
 def index():
@@ -50,21 +57,31 @@ def index():
         if request.form['submit_button'] == 'Add Card':
             stringData=add_card()
             if stringData != "":
-                return render_template('index.html', board=stringData)
+                socketio.emit('board', stringData)
         elif request.form['submit_button'] == 'Delete Card':
             text = request.form['text']
             stringData=delete_card(text)
             if stringData != "":
-                return render_template('index.html', board=stringData)
+                socketio.emit('board', stringData)
+        return redirect(url_for('index'))
     return render_template('index.html')
 
+@app.route('/life', methods=['POST'])
+def life_counter():
+    if request.form['submit_button'] == '+1':
+        life[0]+=1
+    elif request.form['submit_button'] == '-1':
+        life[0]-=1
+    elif request.form['submit_button'] == 'reset':
+        life[0]=40
+    with app.test_request_context('/life'):
+        socketio.emit('l1', life[0])
+    return redirect(url_for('index'))
+
 def add_card():
-    f = open("current_card.txt")
-    current_card = f.read()
-    f.close()
-    if current_card == "":
+    if current_card[0] == "":
         return ""
-    current_board.append(current_card)
+    current_board.append(current_card[0])
     board = create_board(current_board)
     r, cnt = cv2.imencode('.jpg',board)
     stringData = base64.b64encode(cnt).decode('utf-8')
@@ -73,21 +90,22 @@ def add_card():
     return stringData
     
 def delete_card(card_name):
-    for filename in os.listdir(CARD_FILEPATH):
-        if filename == card_name + ".json":
-            with open(CARD_FILEPATH+"/"+filename) as json_file:
-                card_info = json.load(json_file)
-            image = card_info["image_uris"]["png"]
-            if image in current_board:
-                current_board.remove(image)            
-                print("removed: " + card_name)
-    if len(current_board) > 0:
-        board = create_board(current_board)
-        r, cnt = cv2.imencode('.jpg',board)
-        stringData = base64.b64encode(cnt).decode('utf-8')
-        b64_src = 'data:image/jpg;base64,'
-        stringData = b64_src + stringData
-        return stringData
+    if card_name!="":
+        for filename in os.listdir(CARD_FILEPATH):
+            if filename == card_name + ".json":
+                with open(CARD_FILEPATH+"/"+filename) as json_file:
+                    card_info = json.load(json_file)
+                image = card_info["image_uris"]["png"]
+                if image in current_board:
+                    current_board.remove(image)            
+                    print("removed: " + card_name)
+        if len(current_board) > 0:
+            board = create_board(current_board)
+            r, cnt = cv2.imencode('.jpg',board)
+            stringData = base64.b64encode(cnt).decode('utf-8')
+            b64_src = 'data:image/jpg;base64,'
+            stringData = b64_src + stringData
+            return stringData
     return ""
 
 def vconcat_resize_min(im_list, interpolation=cv2.INTER_CUBIC):
@@ -140,10 +158,19 @@ def create_board(current_board):
     resized = cv2.resize(imgmatrix, (mat_x//3,mat_y//3), interpolation = cv2.INTER_AREA)
     return resized
 
-camera = cv2.VideoCapture(0, cv2.CAP_V4L2)
 def gen_frames():  
     while True:
         success, frame = camera.read()  # read the camera frame
+        with app.test_request_context('/life'):
+            socketio.emit('l1', life[0])
+        if len(current_board) > 0:
+            board = create_board(current_board)
+            r, cnt = cv2.imencode('.jpg',board)
+            stringData = base64.b64encode(cnt).decode('utf-8')
+            b64_src = 'data:image/jpg;base64,'
+            stringData = b64_src + stringData
+            with app.test_request_context('/'):
+                socketio.emit('board', stringData)
         if not success:
             break
         else:
@@ -153,16 +180,13 @@ def gen_frames():
             if urls:
                 with app.test_request_context('/'):
                     socketio.emit('data', urls[0])
-
-                f = open("current_card.txt", "w")
-                f.truncate(0)
-                f.write(urls[0])
-                f.close()
+                current_card[0] = urls[0]
 
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n') 
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        time.sleep(REFRESH_RATE)
 
 @app.route('/video_feed')
 def video_feed():
@@ -334,8 +358,8 @@ def analyze_ROI(roi):
                 #cv2.moveWindow("card_"+str(roi_index), roi_index*REFERENCE_WIDTH, 0)
 
                 #manually check this card is correct
-                confirmation = input("is this card " + closest_card + "? y/n \t")
-                #confirmation = "y"
+                # confirmation = input("is this card " + closest_card + "? y/n \t")
+                confirmation = "y"
 
                 if confirmation == 'y':
                     #find data about card (must not happen more than 10 times per second)
@@ -345,6 +369,7 @@ def analyze_ROI(roi):
                         for word in words:
                             url_ending+=word+"-"
                         url_ending = url_ending[:-1]
+                        # print(url_ending)
                         response = urllib.request.urlopen(api_url+url_ending)
                         data = json.loads(response.read())
                         output_path = os.path.join("card_info", closest_card+".json")
@@ -380,19 +405,19 @@ def parse_card_info(closest_card):
 
     #return color
     colors = card_info["colors"]
-    print("this card's colors are: " + str(colors))
+    # print("this card's colors are: " + str(colors))
 
     #return cost
     cost = card_info["mana_cost"]
-    print("this card's cost is: " + str(cost))
+    # print("this card's cost is: " + str(cost))
 
     #return cmc
     cmc = card_info["cmc"]
-    print("this card's cmc is: " + str(cmc))
+    # print("this card's cmc is: " + str(cmc))
 
     #return oracle text
     effect = card_info["oracle_text"]
-    print("text: " + str(effect))
+    # print("text: " + str(effect))
 
     return card_info["image_uris"]["png"]
 

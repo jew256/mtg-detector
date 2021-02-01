@@ -5,7 +5,6 @@
 {% endblock %}
 
 {% block body %}
-
 <table>
     <tr>
         <th>Live Feed</th>
@@ -22,16 +21,18 @@
                 var socket = io.connect();
                 socket.on('data', (data) => {
                     const imageElm = document.getElementById('image1');
-                    //imageElm.src = `data:image/jpeg;base64,${image}`;
                     imageElm.src = data;
                 });
-                // socket.on('create_board', (data) => {
-                //     const imageElm2 = document.getElementById('image2');
-                //     //imageElm.src = `data:image/jpeg;base64,${image}`;
-                //     imageElm2.src = data;
-                // });
+                socket.on('board', (data) => {
+                    const imageElm = document.getElementById('board');
+                    imageElm.src = data;
+                });
+                socket.on('l1', (data) => {
+                            const life1 = document.getElementById('life_1');
+                            life1.textContent = data;
+                        });
             </script>
-            
+
             <div class="form">
                 <form action="/" method="POST">
                     <input type="submit" name="submit_button" value="Add Card">
@@ -40,13 +41,38 @@
                     <input type="submit" name="submit_button" value="Delete Card">
                 </form>
             </div>
+
+            <div class="form">
+                <form action="/life" method="POST">
+                    <input type="submit" name="submit_button" value= "+1">
+                    <input type="submit" name="submit_button" value= "-1">
+                    <input type="submit" name="submit_button" value= "reset">
+                    <ul id="life_1"></ul>
+                </form>
+            </div>
+            <!-- <script>
+                var i = 0;
+                function up_1() {
+                    document.getElementById('life').value = ++i;
+                }
+                function down_1(){
+                    document.getElementById('life').value = --i;
+                }
+                function resetLife(){
+                    document.getElementById('life').value = i = 40;
+                }
+            </script>
+            <button onclick="up_1()">+1</button>
+            <button onclick="down_1()">-1</button>
+            <button onclick="resetLife()">reset life total</button>S
+            <input type="text" id="life"></input> -->
             
         </td>
     </tr>
     <tr>
         <td>
             Current Board:
-            <img src = "{{board}}">
+            <img id = "board">
         </td>
     </tr>
     
