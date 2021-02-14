@@ -27,7 +27,7 @@ args = vars(ap.parse_args())
 set_dict = {}
 set_name = args["set_name"]
 set_url = args["url"]
-#name = "modern horizons"
+api_url = "https://api.scryfall.com/cards/named?fuzzy="
 
 def url_to_image(url):
         # download the image, convert it to a NumPy array, and then read
@@ -68,46 +68,18 @@ class SetSpider(scrapy.Spider):
         links = response.css('img::attr(src)').extract()
         names = process_names(names)
         links = process_links(links)
-        # print(len(links))
         for i in range(len(names)):
-            name = names[i]
+            title = names[i]
+            title = title.replace("\u2019", "")
+            title = title.replace("'", "")
             link = links[i]
-            #print(name)
-            imageHash = hash(name, link)
-            l = set_dict.get(imageHash, [])
-            l.append(name)
-            set_dict[imageHash] = l
-        
-
-# haystackPaths = list(paths.list_images(args["haystack"]))
-
-# # remove the `\` character from any filenames containing a space
-# # (assuming you're executing the code on a Unix machine)
-# if sys.platform != "win32":
-# 	haystackPaths = [p.replace("\\", "") for p in haystackPaths]
-
-# # initialize the dictionary that will map the image hash to corresponding image,
-# # hashes, then start the timer
-# haystack = {}
-# start = time.time()
-
-# # loop over the haystack paths
-# for p in haystackPaths:
-#     image = cv2.imread(p)
-#     cv2.imshow("current card", image)
-#     cv2.waitKey(0)
-#     name = input("enter card name: ")
-#     imageHash = str(imagehash.average_hash(Image.open(p)))
-    
-#     # update the haystack dictionary
-#     l = haystack.get(imageHash, [])
-#     l.append(name)
-#     haystack[imageHash] = l
-#     cv2.destroyAllWindows()
-
-# show timing for hashing haystack images, then start computing the
-# hashes for needle images
-
+            #adding image hash
+            imageHash = hash(title, link)
+            l = set_dict.get(title, [])
+            l.append(imageHash)
+            set_dict[title] = l
+            
+            
 def main():
     print("[INFO] computing hashes for images...")
     start = time.time()

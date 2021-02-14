@@ -3,6 +3,7 @@ from flask import Flask, render_template, Response, request, redirect, url_for
 from flask_socketio import SocketIO
 from flask_socketio import send, emit
 #from flask_session import Session
+from difflib import SequenceMatcher
 from os import path
 import numpy as np
 import cv2
@@ -14,6 +15,7 @@ import time
 import sys
 import base64
 import itertools
+import pytesseract
 
 #TODO: make card images clickable to view information - a task not suitable for flask?
 #TODO: make actual virtual board for cards to sit on: able to drag them around to reposition
@@ -22,9 +24,9 @@ import itertools
 #TODO: more than 2 clients at once. display up to 4 playing boards at the same time
 
 ASPECT_THRESHOLD = 0.7
-AREA_LOWER_THRESHOLD = 0.02
+AREA_LOWER_THRESHOLD = 0.03
 AREA_UPPER_THRESHOLD = 0.5
-HASH_TOLERANCE = 8
+HASH_TOLERANCE = 10
 REFERENCE_WIDTH = 265
 REFERENCE_HEIGHT = 370
 REFRESH_RATE = 0.05
@@ -46,7 +48,7 @@ socketio = SocketIO(app)
 socketio.init_app(app, cors_allowed_origins="*")
 
 camera = cv2.VideoCapture(0)
-print("camera opened")
+
 # success, frame = camera.read()
 # cv2.imshow("f", frame)
 # cv2.waitKey(0)
@@ -192,31 +194,6 @@ def gen_frames():
 def video_feed():
     return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# def rotate_image(image, angle):
-#     # Grab the dimensions of the image and then determine the center
-#     (h, w) = image.shape[:2]
-#     (cX, cY) = (w / 2, h / 2)
-
-#     # grab the rotation matrix (applying the negative of the
-#     # angle to rotate clockwise), then grab the sine and cosine
-#     # (i.e., the rotation components of the matrix)
-#     M = cv2.getRotationMatrix2D((cX, cY), -angle, 1.0)
-#     cos = np.abs(M[0, 0])
-#     sin = np.abs(M[0, 1])
-
-#     # Compute the new bounding dimensions of the image
-#     nW = int((h * sin) + (w * cos))
-#     nH = int((h * cos) + (w * sin))
-
-#     # Adjust the rotation matrix to take into account translation
-#     M[0, 2] += (nW / 2) - cX
-#     M[1, 2] += (nH / 2) - cY
-
-#     # Perform the actual rotation and return the image
-#     return cv2.warpAffine(image, M, (nW, nH))
-
-
-
 def perspective_transform(image, corners):
     def order_corner_points(corners):
         # Separate corners into individual points
@@ -315,18 +292,18 @@ def analyze_ROI(roi):
     cards_this_frame = []
     urls = []
     for r in roi: 
-
-        # #tesseract attempt
-        # resized = cv2.resize(r, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
-        # crop_img = resized[0:50, 0: REFERENCE_WIDTH-50]
-        # print(pytesseract.image_to_string(crop_img))
-        # cv2.imshow("cropped", crop_img)
-        # cv2.waitKey(0)
-
-        #current = cv2.cvtColor(r, cv2.COLOR_BGR2GRAY)
         current = cv2.resize(r, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
         # cv2.imshow("current", current)
         # cv2.waitKey(0)
+
+        #text detection
+        full_text = pytesseract.image_to_string(current)
+        # print(full_text)
+        #tesseract attempt
+        resized = cv2.resize(r, (REFERENCE_WIDTH, REFERENCE_HEIGHT))
+        crop_img = resized[0:50, 0: REFERENCE_WIDTH-50]
+        title = pytesseract.image_to_string(crop_img)
+        # print(text)
         
         im_pil = Image.fromarray(current)
         imageHash = imagehash.average_hash(im_pil)
@@ -338,11 +315,36 @@ def analyze_ROI(roi):
             haystack = {}
             with open(DICT_FILEPATH+"/"+filename) as json_file:
                 haystack = json.load(json_file)
-            for hash in haystack:
-                difference = abs(imageHash-imagehash.hex_to_hash(hash))
+            for name in haystack:
+                if name in title: #tesseract caught the name
+                    closest_card = name
+                    min_dif = -1
+                    break
+            
+                image_dif = abs(imageHash-imagehash.hex_to_hash(haystack[name][0]))
+
+                matching_words = 0
+                if not full_text.isspace():
+                    for word in full_text.split():
+                        if not word.isspace():
+                            if word in haystack[name][1]:
+                                matching_words += 1
+
+                # if matching_words > int(0.2*len(haystack[name][0].split())): #found enough matching words to be confident in answer
+                #     print("found by matching words: " + name)
+                #     closest_card = name
+                #     min_dif = -1
+                #     break
+
+                text_dif = 0
+                if not full_text.isspace():
+                    text_dif = SequenceMatcher(None, full_text, haystack[name][1]).ratio() * 5
+                # print(text_dif)
+                difference = image_dif-text_dif
                 if difference < min_dif:
                     min_dif = difference
-                    closest_card = str(haystack[hash][0])
+                    closest_card = name
+        #print(min_dif)
             
         if min_dif < HASH_TOLERANCE:
             # print(haystack[hash])
@@ -423,11 +425,16 @@ def parse_card_info(closest_card):
 
 
 def video_capture():
-    cap = cv2.VideoCapture(0)
+    #cap = cv2.VideoCapture(0)
+    # cap = cv2.VideoCapture('input/20210206_184658.mp4')
+    if camera is None:
+        print("No camera detected")
+        return
 
     while(True):
         # Capture frame-by-frame
-        ret, frame = cap.read()
+        ret, frame = camera.read()
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE) 
 
         # operations on the frame
         image, roi = find_cards(frame)
@@ -438,7 +445,7 @@ def video_capture():
             break
 
     # When everything done, release the capture
-    cap.release()
+    camera.release()
     cv2.destroyAllWindows()
 
 def image_input():
@@ -467,4 +474,5 @@ def main():
     #server_input()
 
 if __name__ == "__main__":
-    socketio.run(app)
+    #socketio.run(app)
+    main()
